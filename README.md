@@ -20,9 +20,9 @@ Clone the repo
 git clone https://github.com/alexander-the-alright/ekho
 cd ekho
 ```
-Using your favorite text editor, change the destination IP and Port to whatever works for you. This is defined on line 235 in client.go as 127.0.0.1:1300.
+Using your favorite text editor, change the destination IP and Port to whatever works for you. This is defined on line 247 in client.go as 127.0.0.1:1300.
 
-Now the server file needs to be run on the preferred port, as specified in the client file. This is defined on line 218 in server.go.
+Now the server file needs to be run on the preferred port, as specified in the client file. This is defined on line 257 in server.go.
 
 
 The binary(s) can be obtained using the makefile
@@ -30,7 +30,7 @@ If the server is being run on a separate machine, only run make with client flag
 ``` sh
 make client
 ```
-If both binaries are being run on the same machine, make all will suffice. Although, both of these commands can be bypassed with ```go build```, as this is all ```make``` does anyway.
+If both binaries are being run on the same machine, ```make all``` will suffice. Although, both of these commands can be bypassed with ```go build```, as this is all ```make``` does anyway.
 ``` sh
 make all
 ```
@@ -39,12 +39,13 @@ The client binary needs to run on login, the directory on the Raspberry Pi where
 sudo chmod u+x quote-run.sh
 sudo mv quote-run.sh /etc/update-motd.d/01-quote-run
 ```
-The server binary and complementary script need to be running at all times. Should they be run on a distinct machine, this is also the time to move them.
+The server binary and complementary script need to be running at all times. Should they be run on a distinct machine, this is also the time to move them, as well as the list of quotes they pull from.
 ``` sh
 scp server.go user@ip:~/path/to/file/
 scp server-run.sh user@ip:~/path/to/file/
+scp list.q user@ip:~/path/to/file/
 ```
-On that machine, the server will need to be compiled, so the makefile can be copied with ```scp``` just the same, or compiled using ```go build```.
+On that machine, the server will need to be compiled, so the makefile can be copied with ```scp``` just the same, or compiled using ```go build```. It is important that list.q is in the same directory as the go binary.
 
 From there, on the server machine, to avoid inconvenient server crashes, move the server script, just like the client script.
 ``` sh
