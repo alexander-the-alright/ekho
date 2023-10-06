@@ -1,5 +1,5 @@
 # ekho
-##### _Needlessly Networked MOTD generator_ [WIP]
+##### _Needlessly Networked MOTD generator_
 ## Why?
 To test my abilities to develop networked programs, and to enhance my skills in writing such.
 ## Requirements
