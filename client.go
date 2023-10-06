@@ -1,10 +1,11 @@
 // =============================================================================
 // Auth: alex
 // File: client.go
-// Revn: 10-02-2023  1.0
+// Revn: 10-05-2023  2.0
 // Func: ask server for a message of the day quote
 //
 // TODO: document
+//       expand on /ba/ failures
 //       add more flags?
 //       log errors in logfile
 // =============================================================================
@@ -23,6 +24,9 @@
 //             imported check() from soary
 // 09-29-2023: commented handle()
 //*10-02-2023: commented main(), and friends
+//*10-05-2023: /remove/ works
+//             removed -d flag
+//             commented
 //
 // =============================================================================
 
@@ -39,7 +43,6 @@ import (
     "strings"   // Split
     "time"      // Now, UnixNano
 )
-
 
 
 // print errors if they occur, quit
@@ -72,12 +75,32 @@ func check( err error ) {
 }
 
 
+// get user input
+func in( prompt string ) string {
+    fmt.Print( prompt )     // print user prompt
+    var input string        // declare var to hold user input
+    fmt.Scanln( &input )    // get user input
+    // try to convert to an int, discard results
+    _, err := strconv.Atoi( input )
+    // if there was an error, user didn't input an int
+    if err != nil {
+        // warn user against this
+        fmt.Println( "Input must be a number" )
+        input = in( prompt )    // try to get user input again
+        // this, like handle() calling handle(), seems like a super
+        // bad idea, stack-wise...
+    }
+    // once user has properly inputted a number, return string of num
+    return input
+}
+
+
 // seed and get a new rng
 func seed() *rand.Rand {
     // use current time to seed random number
     s := rand.NewSource( time.Now().UnixNano() )
     r := rand.New( s )  // create new random number from seed
-    return r    // return random number
+    return r            // return random number
 }
 
 
@@ -85,16 +108,9 @@ func seed() *rand.Rand {
 func draw() string {
     rn := seed()            // get a random seed
     r := rn.Intn( qsize )   // get a random number using seed
-    if debug {      // XXX debug print
-        fmt.Println( "random number: ", r )
-    }
     // convert random number to ascii, because converting
     // ints to bytes ( for networking ) and back is obnoxious
     rsz := strconv.Itoa( r )
-    if debug {      // XXX debug print
-        fmt.Println( "converted size var" )
-        fmt.Printf( rsz + ": %T\n", rsz )
-    }
     return rsz      // return rand size
 }
 
@@ -137,7 +153,7 @@ func handle( conn net.Conn ) {
             quotes := strings.Split( msg[1], "\n" )
             for p, v := range quotes {      // iterate over quotes
                 // print num of quote, followed by that quote
-                fmt.Println( p+1, "\t", v )
+                fmt.Println( p + 1, "\t", v )
             }
             resp = "te@success"     // set transaction end message
         case "aa":      // /aa/, add answer
@@ -163,15 +179,18 @@ func handle( conn net.Conn ) {
         // more simply, but this, I feel, has some nuance to it that I
         // actually like
             // redo /la/, list all quotes
+            // split recv'd message over newline to create quote list
             quotes := strings.Split( msg[1], "\n" )
-            for p, v := range quotes {
-                fmt.Println( p+1, "\t", v )
+            for p, v := range quotes {      // iterate over quotes
+                // print num of quote, followed by that quote
+                fmt.Println( p + 1, "\t", v )
             }
-            // TODO get user input
+            // ask user which quote to remove
+            resp = "r2@" + in( "\n-> " )
         case "r2":      // /r2/, remove ( second transaction )
             // if server says remove succeeded
             if msg[1] == "success" {
-                fmt.Println( "Remove successful" )  // print success
+                fmt.Println( "Remove successful\n" )    // success
                 // list all quotes to validate remove succeeded
                 // TODO should /aa/ also make /lr/ before /te/?
                 resp = "lr@dumvar"  // set transaction end message
@@ -193,15 +212,10 @@ func handle( conn net.Conn ) {
             resp = "te@error"       // set transaction end message
         default:        // something undefined entirely
             // TODO write out to file
-            fmt.Println( "Message header not recognized" )
-            fmt.Println( msg )
+            //fmt.Println( "Message header not recognized" )
+            //fmt.Println( msg )
             conn.Close()    // TODO how important is this line
             return      // dead return, essentially lets program quit
-    }
-
-    if debug {      // XXX debug print
-        fmt.Print( "raw read: " + strconv.Itoa( n ) + " bytes " )
-        fmt.Println( buffer[:n] )
     }
 
     // send formulated response back to server
@@ -218,7 +232,6 @@ var conn net.Conn   // keep track of connection
 
 
 // global flag variables
-var debug bool      // debug prints useful information
 var add bool        // add new quotes to quote file ( on server )
 var remove bool     // remove quotes from quote file ( on server )
 var list bool       // request entire quote file from server
@@ -228,16 +241,11 @@ var dest string     // provide a new destination ip and port
 func main() {
 
     // define flags
-    flag.BoolVar( &debug, "d", false, "print debug info" )
     flag.BoolVar( &add, "a", false, "add quote to list" )
     flag.BoolVar( &remove, "r", false, "remove quote from list" )
     flag.BoolVar( &list, "l", false, "print quote list" )
     flag.StringVar( &dest, "ip", ":1300", "ip:port of server" )
     flag.Parse()    // process flags
-
-    if debug {      // XXX debug print
-        fmt.Println( "ip:port = ", dest )
-    }
 
     service := dest     // declare server ip:port
 
@@ -273,7 +281,7 @@ func main() {
             }
         case remove:    // if remove flag is active
             // if arguments were specified
-            if len( flag.Args() ) >= 0 {
+            if len( flag.Args() ) > 0 {
                 // argument is supposed to the number of the quote to
                 // be removed, get first arg
                 // cast to int just to make sure it's a valid number

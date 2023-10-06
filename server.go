@@ -1,13 +1,13 @@
 // =============================================================================
 // Auth: Alex Celani
 // File: server.go
-// Revn: 10-02-2023  1.0
+// Revn: 10-05-2023  2.0
 // Func: host connection, reply to speak.go
 //
-// TODO: fix remove
-//       write back to file, re-read file
-//       add more /codes/ to handle
+// TODO: add more /codes/ to handle
 //       add flags
+//       write usage and errors to logfile
+//       send logfile to client on request
 // =============================================================================
 // CHANGE LOG
 // -----------------------------------------------------------------------------
@@ -24,12 +24,20 @@
 //*10-02-2023: commented handle()
 //             added checks to /qr/ and /r2/ to make sure recv'd
 //              length is valid
+//             wrote writeFile()
+//*10-05-2023: commented
+//             imported check() to ignore EOF
+//             fixed bug in /r2/ where removing quote at final
+//              position would break
+//             removed deadcode from /r2/, unused "quit" bool?
+//
 // =============================================================================
 
 package main
 
 import (
     "fmt"       // Println
+    "io"        // io.EOF
     "io/ioutil" // ReadFile
     "net"       // ResovleTCPAddr, ListenTCP, listener.Accept
                 // conn.Read,Write
@@ -45,6 +53,37 @@ func check( err error ) {
         // print error
         fmt.Println( "Fatal: ", err.Error() )
         os.Exit( 1 )    // bail
+    }
+}
+
+
+// FIXME clean this two check() shit up
+// print errors if they occur, quit
+func checkN( err error, conn net.Conn ) {
+
+    var errep string    // declare error report string
+    switch err {        // switch case over error input
+        case nil:       // if there was no error
+            // then there was no error
+            errep = "err is nil"
+        case io.EOF:    // if there was an End Of File error
+            errep = "Error: " + err.Error()     // document error
+            conn.Close()    // close connection
+        default:    // anything besides those are a big deal
+            errep = "Fatal: " + err.Error()
+    }
+
+    var critical bool   // declare critical error flag
+    // must be neither nil nor EOF
+    critical = err != nil && err != io.EOF
+    if critical {   // XXX critical print
+        // TODO at some point, critical should be logging instead of
+        // printing, only verbose should print
+        fmt.Println( "check() -> ", errep )
+    }
+    
+    if critical {       // if there was a critical error
+        os.Exit( 1 )    // cut and run
     }
 }
 
@@ -69,10 +108,12 @@ func fread() string {
 
 // write qfile back to file
 func writeFile( f string ) {
-    file, err := os.Create( "quotes" )
-    check( err )
+    // open file list.q as variable file
+    file, err := os.Create( "list.q" )
+    check( err )    // make sure open worked
+    // write input string ( quote file ) back to file
     _, err = file.WriteString( f )
-    check( err )
+    check( err )    // make sure writeback worked
 }
 
 
@@ -83,7 +124,7 @@ func handle( conn net.Conn ) {
     var buffer [256]byte
     // read n bytes from client
     n, err := conn.Read( buffer[:] )
-    check( err )    // make sure read worked
+    checkN( err, conn ) // make sure read worked
 
     // cast message to string, take first n bytes, split over @
     command := strings.Split( string( buffer[:n] ), "@" )
@@ -105,7 +146,7 @@ func handle( conn net.Conn ) {
             if nerr != nil {
                 // formulate an error message
                 // TODO flesh this out more
-                resp = "ba@Number not understood"   // bad answer
+                resp = "ba@qr@!"    // bad answer
             } else {        // comm[1] was a number, but...
                 switch {    // how do we know it's a valid number
                     case num > len( qlist ):
@@ -114,7 +155,7 @@ func handle( conn net.Conn ) {
                         // why bad? num is >
                     case num < 0:
                         // bad answer in quote request
-                        resp = "bad@qr@-"
+                        resp = "ba@qr@-"
                         // why bad? num is -
                     default:
                         // good num, get quote, send off
@@ -123,13 +164,14 @@ func handle( conn net.Conn ) {
             }
         case "lr":      // /lr/, list request
             // just concat entire list to send
-            resp = "la@" + qfile[:len( qfile ) - 1]     // list answer
+            //resp = "la@" + qfile[:len( qfile ) - 1]     // list answer
+            resp = "la@" + qfile    // list answer
             // TODO what happens if this is longer than 256 char?
         case "ar":      // /ar/, add request
             // append new quote to list
             qlist = append( qlist, command[1] )
             // also append new quote to file variable
-            qfile = qfile + command[1] + "\n"
+            qfile = qfile + "\n" + command[1]
             writeFile( qfile )
             resp = "aa@success"     // add answer
             // TODO write to file
@@ -144,9 +186,11 @@ func handle( conn net.Conn ) {
             if nerr != nil {
                 // formulate an error message
                 // TODO flesh this out more
-                resp = "ba@Number not understood"   // bad answer
+                resp = "ba@r2@!"    // bad answer
             } else {        // comm[1] was a number, but...
+                num = num - 1
                 switch {    // how do we know it's a valid number
+                            // valid numbers are from 0 - len-1
                     case num > len( qlist ):
                         // bad answer in quote request
                         resp = "ba@r2@>"
@@ -155,36 +199,32 @@ func handle( conn net.Conn ) {
                         // bad answer in quote request
                         resp = "ba@r2@-"
                         // why bad? num is -
+                    // if num is not OUT OF RANGE, must be in range
                     default:
-                        qlist[num + 1] = qlist[len( qlist ) - 1]
+                        // replace the quote at that position with
+                        // final quote
+                        qlist[num] = qlist[len( qlist ) - 1]
+                        // remove second copy of quote
                         qlist = qlist[:len( qlist ) - 1]
-                        var f string = ""
+                        // O(1) remove from list at any position
+                        // must entirely recreate quote string
+                        var f string = ""   // init empty string
+                        // iterate over list, disregard index
                         for _, v := range qlist {
+                            // add next quote to file and separate
+                            // quotes with newline
                             f = f + v + "\n"
                         }
-                        f = f[:len( f ) - 1]
+                        // remove trailing newline, to prevent ghost
+                        f = f[:len( f ) - 1]    // quote in lr
+                        // reassign global string variable to
+                        // recreated quote string
                         qfile = f
-                        writeFile( qfile )
-                        resp = "r2@" + qfile
+                        writeFile( qfile )  // write back to file
+                        // let client know remove was successful
+                        resp = "r2@success"
                 }
             }
-            /*
-            resp = "r2@"    // remove request 2
-            // 
-            index, nerr := strconv.Atoi( command[1] )
-            if nerr == nil {
-                if index < len( qlist ) {
-                    qlist[index] = qlist[len( qlist ) - 1]
-                    qlist = qlist[:len( qlist ) - 1]
-                    //writeFile() //TODO
-                    resp = resp + "success"
-                } else {
-                    resp = resp + "error"
-                }
-            } else {
-                resp = resp + "error"
-            }
-            */
         case "te":      // /te/, transaction end
             // TODO should I be sending something?
             // TODO is it better to close now or outside of handle()
@@ -197,7 +237,7 @@ func handle( conn net.Conn ) {
 
     // write response to client
     _, err = conn.Write( []byte( resp ) )
-    check( err )    // make sure write worked
+    checkN( err, conn ) // make sure write worked
 
     handle( conn )  // call handle() again to get response from client
 
@@ -207,7 +247,6 @@ func handle( conn net.Conn ) {
 // globals
 var qlist []string      // list of quotes
 var qfile string        // file object
-var quit bool
 
 
 // main, create port and wait for connection
