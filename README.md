@@ -34,6 +34,8 @@ If both binaries are being run on the same machine, ```make all``` will suffice.
 ``` sh
 make all
 ```
+At this point, the user should feel free to change the names of the Bash scripts and binaries as they see fit, making sure to update the calls inside the Bash scripts as necessary.
+
 The client binary needs to run on login, the directory on the Raspberry Pi where these scripts go is ```/etc/update-motd.d/```.
 ``` sh
 sudo chmod u+x quote-run.sh
@@ -62,7 +64,6 @@ The client uses the following flags
 -a <s>  - adds required argument <s> as a quote to server
 -l      - list all quotes
 -r [i]  - remove; may be run with or without argument
--v      - verbose usage, prints a lot of stuff that may not be all that useful
 -d      - specify alternate server destination
 -log    - [NOT YET IMPLEMENTED] gets logfile from server (contains use and error histories)
 ```
