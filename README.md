@@ -64,7 +64,7 @@ The client uses the following flags
 -a <s>  - adds required argument <s> as a quote to server
 -l      - list all quotes
 -r [i]  - remove; may be run with or without argument
--d      - specify alternate server destination
+-ip      - specify alternate server destination
 -log    - [NOT YET IMPLEMENTED] gets logfile from server (contains use and error histories)
 ```
 
