@@ -1,11 +1,11 @@
 // =============================================================================
 // Auth: Alex Celani
 // File: server.go
-// Revn: 10-05-2023  2.0
+// Revn: 10-17-2023  3.0
 // Func: host connection, reply to speak.go
 //
 // TODO: add more /codes/ to handle
-//       add flags
+//       add flags?
 //       write usage and errors to logfile
 //       send logfile to client on request
 // =============================================================================
@@ -30,6 +30,11 @@
 //             fixed bug in /r2/ where removing quote at final
 //              position would break
 //             removed deadcode from /r2/, unused "quit" bool?
+//*10-17-2023: fixed bug where quotes are read from and saved to two
+//              different files
+//             removed implicit newline at end of qfile to stop ghost
+//              line bug in /la/
+//             removed dead debug print in fread()
 //
 // =============================================================================
 
@@ -91,17 +96,16 @@ func checkN( err error, conn net.Conn ) {
 // read file and create quote list
 func fread() string {
     // open file "quotes", read entire file as bytes into qfile
-    qfile, err := ioutil.ReadFile( "quotes" )
+    qfile, err := ioutil.ReadFile( "list.q" )
     check( err )    // make sure read works
+    // there is a trailing newline in the file, not removing it caused
+    // bugs where a blank item was introduced into qlist and calling
+    // /la/ would produce a blank line on the client side that didn't
+    // really exist
+    qfile = qfile[:len( qfile ) - 1]
     // cast bytes to string, split string over newline into array
     qlist = strings.Split( string( qfile ), "\n" )
-    // remove last item in list ( trailing newline leaves empty item )
-    qlist = qlist[:len( qlist ) - 1]
-    if false {      // XXX debug print ( next )
-        for _, q := range qlist {   // iterate over all quotes in list
-            fmt.Println( q )        // print quote
-        }
-    }
+    // deal with the trailing
     return string( qfile )      // return file as string
 }
 

@@ -13,7 +13,7 @@
 # ==============================================================================
 
 # if I do this
-# ~/bin/ekho-server &
+#~/bin/ekho-server &
 # I have no way I of restarting the process when it ends
 # might need to look into using Signals to restart, may PID?
 

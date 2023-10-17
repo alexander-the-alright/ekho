@@ -17,5 +17,5 @@
 
 # it's encouraged to rename the binary something a little more unique
 # organize in bin folder
-# ~/bin/ekho
+#~/bin/ekho-cli
 
