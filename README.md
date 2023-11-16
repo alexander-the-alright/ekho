@@ -65,7 +65,11 @@ The client uses the following flags
 -l      - list all quotes
 -r [i]  - remove; may be run with or without argument
 -ip      - specify alternate server destination
--log    - [NOT YET IMPLEMENTED] gets logfile from server (contains use and error histories)
 ```
+
+### To Be Implemented
+- Log all uses/transaction data each day
+- Request, send, and receive the logfile for any day
+- User-specific quotes/quotefiles
 
 [golang]: <https://go.dev/doc/install>
