@@ -34,27 +34,20 @@ If both binaries are being run on the same machine, ```make all``` will suffice.
 ``` sh
 make all
 ```
-At this point, the user should feel free to change the names of the Bash scripts and binaries as they see fit, making sure to update the calls inside the Bash scripts as necessary.
 
-The client binary needs to run on login, the directory on the Raspberry Pi where these scripts go is ```/etc/update-motd.d/```.
-``` sh
-sudo chmod u+x quote-run.sh
-sudo mv quote-run.sh /etc/update-motd.d/01-quote-run
-```
-The server binary and complementary script need to be running at all times. Should they be run on a distinct machine, this is also the time to move them, as well as the list of quotes they pull from.
-``` sh
-scp server.go user@ip:~/path/to/file/
-scp server-run.sh user@ip:~/path/to/file/
-scp list.q user@ip:~/path/to/file/
-```
-On that machine, the server will need to be compiled, so the makefile can be copied with ```scp``` just the same, or compiled using ```go build```. It is important that list.q is in the same directory as the go binary.
+#### NOTE
+In previous versions, the suggested method of installation involved placing bash scripts in ```/etc/update-motd.d/```, however, there have been issues getting that installation method working (namely, having MOTD run user-defined commands), and the current quick and extremely dirty suggested installation method is to just append the user's shell config files (```.bashrc```, ```.bash_profile```, ```.zshrc```, etc) with the paths to the executables.
 
-From there, on the server machine, to avoid inconvenient server crashes, move the server script, just like the client script.
+For example, if the server used zsh, the installation could look something like this:
 ``` sh
-sudo chmod u+x server-run.sh
-sudo mv server-run.sh /etc/update-motd.d/01-server-run
+echo "~/abs/path/to/server.o &" >> ~/.zshrc
 ```
-This installation method requires the user to be logged in at all times, and will run multiple instances should the same user log in multiple times, so it is recommended to have a either have a main user that never logs out, or a dummy user that auto-logs in on reboot. (If someone knows a better way to have one instance of the software always run, please let me know)
+Similarly for a client using Bash:
+``` sh
+echo "~/abs/path/to/client.o" >> ~/.bashrc
+```
+
+Any help figuring out the issue with MOTD would be appreciated.
 
 Finally done!
 ### Usage
@@ -64,12 +57,13 @@ The client uses the following flags
 -a <s>  - adds required argument <s> as a quote to server
 -l      - list all quotes
 -r [i]  - remove; may be run with or without argument
--ip      - specify alternate server destination
+-ip     - specify alternate server destination
 ```
 
 ### To Be Implemented
 - Log all uses/transaction data each day
 - Request, send, and receive the logfile for any day
 - User-specific quotes/quotefiles
+- Installation (client-side, at least) via MOTD
 
 [golang]: <https://go.dev/doc/install>
