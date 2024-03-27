@@ -60,10 +60,18 @@ The client uses the following flags
 -ip     - specify alternate server destination
 ```
 
+### How It Works 
+The sequence diagram can be viewed in ```diag``` folder, which shows the sequence of networked messages for each usage of ekho.
+The source code is in the same folder, ```ekho-seq.txt```, and can be uploaded to [sequencediagram.org][seqdiag] to rerender the diagram and view any updates.
+
+
 ### To Be Implemented
+- Multiple transactions for large quote file
 - Log all uses/transaction data each day
 - Request, send, and receive the logfile for any day
 - User-specific quotes/quotefiles
 - Installation (client-side, at least) via MOTD
 
+
 [golang]: <https://go.dev/doc/install>
+[seqdiag]: <sequencediagram.org>

@@ -1,0 +1,149 @@
+title ekho
+
+# declare entities
+actor user
+participant ekho
+database server
+
+
+# user requesting a quote of the day
+==request==
+
+user->(1)ekho:./ekho
+space -2.75
+ekho->(1)server:sr@please
+space -2.75
+server-->server:grab length of quotes, N
+space -2.75
+server->(1)ekho:sa@N
+space -2.75
+ekho-->ekho:random number\nX ≤ N
+space -2.75
+ekho->(1)server:qr@X
+space -2.75
+server->(1)ekho:qa@xyz
+space -2.75
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:xyz
+
+
+# begin list sequence
+==list==
+
+user->(1)ekho:./ekho -l
+space -2.75
+ekho->(1)server:lr@dumvar
+space -2.75
+server->(1)ekho:la@xyz...
+space -2.75
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:xyz
+
+
+# when list length is larger than buffer size
+==list overrun==
+
+user->(1)ekho:./ekho -l
+space -2.75
+ekho->(1)server:lr@dumvar
+space -2.75
+server->(1)ekho:la@1@xyz...
+space -2.75
+ekho->(1)server:lr@1
+space -2.75
+server->(1)ekho:la@2@abc...
+box over ekho,server:repeat until quote\nlist is near empty
+space -2.75
+ekho->(1)server:lr@n-1
+space -2.75
+server->(1)ekho:la@n@pqr...
+space -2.75
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:xyz...abc...pqr
+
+
+# user wants to add new quote to list
+==add==
+
+user->(1)ekho:./ekho -a "xyz"
+space -2.75
+ekho->(1)server:ar@xyz
+space -2.75
+server->(1)ekho:aa@success
+space -2.75
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:"add successful"
+
+
+# user wants to remove quote
+==remove==
+
+user->(1)ekho:./ekho -r
+space -2.75
+ekho->(1)server:r1@dumvar
+space -2.75
+server->(1)ekho:r1@xyz...
+box over ekho,server:basically redo la,\nlisting all quotes
+space -2.75
+ekho->(1)user:xyz...abc...pqr
+space -2.75
+user->(1)ekho:X
+ekho->(1)server:r2@X
+space -2.75
+server->(1)ekho:r2@success
+space -2.75
+ekho->(1)server:lr@dumvar
+space -2.75
+server->(1)ekho:la@xyz...
+box over ekho,server:literally redo la,\nlisting all quotes
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:xyz...abc...pqr
+
+
+# user wants to remove quote, knows which one
+==remove (known)==
+
+user->(1)ekho:./ekho -r X
+space -2.75
+ekho->(1)server:r2@X
+space -2.75
+server->(1)ekho:r2@success
+space -2.75
+ekho->(1)server:lr@dumvar
+space -2.75
+server->(1)ekho:la@xyz...
+box over ekho,server:literally redo la,\nlisting all quotes
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:xyz...abc...pqr
+
+
+# user wants to get receive logs (WIP lol)
+==log==
+
+user->(1)ekho:./ekho -g
+space -2.75
+ekho->(1)server:gr@dumvar
+space -2.75
+server->(1)ekho:ga@1@xyz
+box over ekho,server:redo LONG la using log\nfile instead of quotes
+space -2.75
+ekho->(1)server:gr@n-1
+space -2.75
+server->(1)ekho:ga@n@pqr
+space -2.75
+ekho->(1)server:te@success
+space -2.75
+ekho->(1)user:"logs received"
+
+
+# eventually I will need to figure out
+# how to clear logs
+
+# delete log file
+#==clear logs==
