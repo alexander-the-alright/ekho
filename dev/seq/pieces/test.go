@@ -1,11 +1,10 @@
 // =============================================================================
 // Auth: Alex Celani
 // File: test.go
-// Revn: 05-13-2024  0.2
+// Revn: 05-19-2024  0.4
 // Func: explore bounding on piecewise file transmission ( PWFT )
 //
-// TODO: rewrite makedata() to write to a file
-//       write level4()
+// TODO: implement
 // =============================================================================
 // CHANGE LOG
 // -----------------------------------------------------------------------------
@@ -15,22 +14,59 @@
 //             level 2 PWFT
 // 05-13-2024: comment level 1 and level 2 PWFT
 //             level 3 PWFT
+// 05-18-2024: began level 4 changes
+// 05-19-2024: got level 4 working
+//             commented
+//             wrote level 5
+//             commented
+//             wrote level 6!
+//             commented
 //
 // =============================================================================
 
 package main
 
 import ( 
+    "flag"
     "fmt"
     "math/rand"
+    "net"       // ResovleTCPAddr, ListenTCP, listener.Accept
+                // conn.Read,Write
+    "os"        // Exit
     "strconv"
 )
 
+
+/*
 func makedata() {
     for c := 0; c < dsize; c++ {
         datum[c] = rand.Intn( dsize )
     }
 }
+*/
+
+// special make function for strings
+func makedatatx() {
+    // classic iteration of length dsize, toss in same-sized array
+    for c := 0; c < dsize; c++ {
+        // toss in same size array
+        // rand int picks letter, 0x61 -> lowercase ascii, cast byte
+        datumtx[c] = byte( rand.Intn( 26 ) + 0x61 )
+    }
+    // cast to string and print ( as slice )
+    fmt.Println( string( datumtx[:] ) )
+}
+
+
+// handle errors catastrophically
+func check( err error ) {
+    if err != nil {    // error is not nil on error
+        // print error
+        fmt.Println( "Fatal: ", err.Error() )
+        os.Exit( 1 )    // bail
+    }
+}
+
 
 // Levels of PWFT
 // 0. print everything indescriminately
@@ -40,6 +76,7 @@ func makedata() {
 // 4. file tx piecewise
 // 5. file tx piecewise with header
 // 6. file tx piecewise with variable header
+
 
 // level 0 PWFT
 func level0( data []int) {
@@ -108,19 +145,124 @@ func level3() {
 }
 
 
+// level 4 PWFT
+func level4( conn net.Conn ) {
+    txn := dsize / tsize    // amount of transmissions
+
+    // iterate for number of transmissions
+    for c := 0; c < txn; c++ {
+        // write that amount of times, very specific slice
+        _, err := conn.Write( datumtx[c*tsize:(c+1)*tsize] )
+        check( err )    // routine error check
+    }
+
+    // write final of last chunk of data
+    _, err := conn.Write( datumtx[txn * tsize:] )
+    check( err )    // routine error check
+    _, err = conn.Write( []byte( "|" ) )    // write end char
+    check( err )    // routine error check
+}
+
+
+// level 5 PWFT
+func level5( conn net.Conn ) {
+    header := "la@x@"               // static header
+    psize := tsize - len( header )  // calculate payload size
+
+    txn := dsize / psize    // amount of transmissions
+
+    // iterate for number of transmissions
+    for c := 0; c < txn; c++ {
+        // concat header with payload, easier as string, cast to byte
+        packet := header + string( datumtx[c*psize:(c+1)*psize] )
+        // write that amount of times, very specific slice
+        _, err := conn.Write( []byte( packet ) )
+        check( err )    // routine error check
+    }
+
+    // concat last payload
+    packet := header + string( datumtx[txn*psize:] )
+    // write final of last chunk of data
+    _, err := conn.Write( []byte( packet ) )
+    check( err )    // routine error check
+    _, err = conn.Write( []byte( "|" ) )    // write end char
+    check( err )    // routine error check
+}
+
+
+// level 6 PWFT
+func level6( conn net.Conn ) {
+    var header string       // declare header
+    var hhead, htail string = "la@", "@"    // static pieces of header
+    txn := 1    // init transmission number
+    pos := 0    // init position tracker
+
+    for {   // easier to do an infinite loop and break later
+        // combine both static parts of the header with the tx number
+        header = hhead + strconv.Itoa( txn ) + htail
+        hlen := len( header )   // keep track of total header length
+
+        // craft packet
+        packet := header + string( datumtx[pos:( pos + tsize - hlen )] )
+
+        // cast packet to byte array and send
+        _, err := conn.Write( []byte( packet ) )
+        check( err )    // routine error check
+
+        // update position as last position printed
+        pos = pos + tsize - hlen
+        txn++   // update transmission number
+
+        // check to see if *updated* position goes out of bounds
+        if pos + tsize - hlen > dsize {
+            break   // break if'n
+        }
+    }
+    // print nth header ( X denotes final transmission )
+    header = hhead + "X" + htail
+    packet := header + string( datumtx[pos:] )
+    // cast data to string, concat, cast to byte array, send
+    _, err := conn.Write( []byte( packet ) )
+    check( err )    // routine error check
+
+}
+
 
 // size variables
 var dsize int = 104
 // data global
 var datum = make( []int, dsize )
+var datumtx = make( []byte, dsize )
+var tsize int
 
 
 func main() {
-    makedata()  // fill global with data
 
+    flag.IntVar( &tsize, "s", 10, "tx size" )
+    flag.Parse()
+
+    makedatatx()  // fill global with data
+
+    service := ":1300"  // create service on ip and port
+
+    // resolve ip address and port
+    addr, err := net.ResolveTCPAddr( "tcp", service )
+    check( err )    // make sure ip resolves
+
+    // create listener object from ip:port
+    listener, err := net.ListenTCP( "tcp", addr )
+    
     // print global data to show that PWFT works as intended
-    level0( datum )
+    //level0( datum )
 
-    level3()    // do the thing
+    //level3()    // do the thing
+
+    for {
+        // wait, create connection when found
+        conn, err := listener.Accept()
+        check( err )    // make sure connection works
+    
+        go level6( conn )  // handle connection
+    }
 }
 
