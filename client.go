@@ -1,10 +1,10 @@
 // =============================================================================
 // Auth: alex
 // File: client.go
-// Revn: 10-05-2023  2.0
+// Revn: 06-14-2024  3.0
 // Func: ask server for a message of the day quote
 //
-// TODO: document
+// TODO: remove ioutil import
 //       expand on /ba/ failures
 //       add more flags?
 //       log errors in logfile
@@ -27,6 +27,12 @@
 //*10-05-2023: /remove/ works
 //             removed -d flag
 //             commented
+// 06-12-2024: began added PWFT to /la/
+// 06-13-2024: finished adding PWFT to /la/
+//             commented PWFT stuff
+//             STARTED BYTE-BASED PWFT REWRITE
+//*06-14-2024: finished byte-based PWFT rewrite
+//             commented
 //
 // =============================================================================
 
@@ -34,11 +40,12 @@ package main
 
 import ( 
     "io"        // io.EOF
+    "io/ioutil" // ReadFile
     "flag"      // BoolVar, StringVar, Parse
     "fmt"       // Println
     "math/rand" // NewSource, New, Intn, *rand.Rand
     "net"       // ResolveTCPAddr, DialTCP, conn.Write,Read
-    "os"        // Exit
+    "os"        // Exit, Create
     "strconv"   // Atoi, Itoa
     "strings"   // Split
     "time"      // Now, UnixNano
@@ -118,7 +125,10 @@ func draw() string {
 // get server response and print
 func handle( conn net.Conn ) {
 
-    var buffer [512]byte    // create buffer to hold response
+    // create buffer to hold response
+    buffer := make( []byte, tsize )
+
+    //var buffer [32]byte    // create buffer to hold response
     // read n bytes from server into buffer ( byte slice )
     n, err := conn.Read( buffer[:] )
     check( err )    // check for errors
@@ -149,13 +159,51 @@ func handle( conn net.Conn ) {
             fmt.Println( msg[1] )   // whole-ass just print quote
             resp = "te@success"     // set transaction end message
         case "la":      // /la/, list answer
-            // split recv'd message over newline to create quote list
-            quotes := strings.Split( msg[1], "\n" )
-            for p, v := range quotes {      // iterate over quotes
-                // print num of quote, followed by that quote
-                fmt.Println( p + 1, "\t", v )
+            if len( msg ) > 2 {     // multistage send condition
+                if msg[1] == "X" {      // final message
+                    // TODO update
+                    // read entire temp storage file as byte array
+                    tfile, err := ioutil.ReadFile( "temp.q" )
+                    check( err )    // check read for errors
+                    // cast file to string, concat with recv'd string
+                    tstr := string( tfile ) + msg[2]
+                    // split concat over newlines, separating quotes
+                    tlist := strings.Split( tstr, "\n" )
+                    // iterate over array, printing each quote
+                    for p, v := range tlist {
+                        fmt.Println( p + 1, "\t", v )
+                    }
+                    // delete temp storage file
+                    err = os.Remove( "temp.q" )
+                    check( err )    // check rm for errors
+                    resp = "te@X"   // successful response message
+                } else {    // first or intermediate message
+                    // open temp quote storage file, creating if
+                    // necessary, with write-only permissions, in
+                    // append mode, wr u perm, r g/w perm
+                    f, err := os.OpenFile( "temp.q", os.O_WRONLY | os.O_APPEND | os.O_CREATE, 0644 )
+                    check( err )    // check file open for errors
+                    // write received message to file, keeping track
+                    // of bytes written
+                    n, err = f.WriteString( msg[2] )
+                    check( err )    // check file write for errors
+                    // cast bytes already written field to int
+                    b, err := strconv.Atoi( msg[1] )
+                    check( err )    // check cast for errors
+                    // add bytes just written to bytes already
+                    // written, cast back to string, and append to
+                    // response variable
+                    resp = "lr@" + strconv.Itoa( b + n )
+                }
+            } else {
+                // split recv'd message over \n, create quote list
+                quotes := strings.Split( msg[1], "\n" )
+                for p, v := range quotes {      // iterate over quotes
+                    // print num of quote, followed by that quote
+                    fmt.Println( p + 1, "\t", v )
+                }
+                resp = "te@success"     // set transaction end message
             }
-            resp = "te@success"     // set transaction end message
         case "aa":      // /aa/, add answer
             // if server says add succeeded
             if msg[1] == "success" {
@@ -236,7 +284,7 @@ var add bool        // add new quotes to quote file ( on server )
 var remove bool     // remove quotes from quote file ( on server )
 var list bool       // request entire quote file from server
 var dest string     // provide a new destination ip and port
-
+var tsize int       // size of transmission buffer
 
 func main() {
 
@@ -245,6 +293,7 @@ func main() {
     flag.BoolVar( &remove, "r", false, "remove quote from list" )
     flag.BoolVar( &list, "l", false, "print quote list" )
     flag.StringVar( &dest, "ip", ":1300", "ip:port of server" )
+    flag.IntVar( &tsize, "s", 256, "transmission size ( bytes )" )
     flag.Parse()    // process flags
 
     service := dest     // declare server ip:port
@@ -261,7 +310,7 @@ func main() {
     var command string
     switch {        // empty switch statement is basically an if
         case list:  // if list flag is active
-            command = "lr@dumvar"   // list request
+            command = "lr@init"     // list request
             // TODO come up with a useful argument, instead of dumvar
         case add:   // if add flag is active
             // if arguments were specified
