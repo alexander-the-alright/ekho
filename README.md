@@ -58,6 +58,12 @@ The client uses the following flags
 -l      - list all quotes
 -r [i]  - remove; may be run with or without argument
 -ip     - specify alternate server destination
+-s      - specify the size of the receipt buffer
+```
+The server uses the following flags
+``` sh
+-h      - display help message
+-s      - specify the size of the receipt buffer
 ```
 
 ### How It Works 
@@ -66,7 +72,6 @@ The source code is in the same folder, ```ekho-seq.txt```, and can be uploaded t
 
 
 ### To Be Implemented
-- Multiple transactions for large quote file
 - Log all uses/transaction data each day
 - Request, send, and receive the logfile for any day
 - User-specific quotes/quotefiles
