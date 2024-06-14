@@ -1,11 +1,13 @@
 // =============================================================================
-// Auth: Alex Celani
+// Auth: alex
 // File: server.go
-// Revn: 10-17-2023  3.0
-// Func: host connection, reply to speak.go
+// Revn: 06-14-2024  4.0
+// Func: host MOTD connection
 //
-// TODO: add more /codes/ to handle
-//       add flags?
+// TODO: catch keyboard int. signal
+//       remove ioutil import
+//       add more /codes/ to handle
+//       add flags, like specify port
 //       write usage and errors to logfile
 //       send logfile to client on request
 // =============================================================================
@@ -35,12 +37,19 @@
 //             removed implicit newline at end of qfile to stop ghost
 //              line bug in /la/
 //             removed dead debug print in fread()
+// 05-26-2024: began writing PWFT update
+//             added flag to specify transmission buffer size
+// 06-12-2024: "successfully" wrote PWFT
+// 06-13-2024: removed debug print statements
+//             commented
+//*06-14-2024: byte count-based PWFT rewrite
 //
 // =============================================================================
 
 package main
 
 import (
+    "flag"      // IntVar, Parse
     "fmt"       // Println
     "io"        // io.EOF
     "io/ioutil" // ReadFile
@@ -102,7 +111,7 @@ func fread() string {
     // bugs where a blank item was introduced into qlist and calling
     // /la/ would produce a blank line on the client side that didn't
     // really exist
-    qfile = qfile[:len( qfile ) - 1]
+    //qfile = qfile[:len( qfile ) - 1]
     // cast bytes to string, split string over newline into array
     qlist = strings.Split( string( qfile ), "\n" )
     // deal with the trailing
@@ -125,7 +134,8 @@ func writeFile( f string ) {
 func handle( conn net.Conn ) {
 
     // create buffer to hold read message
-    var buffer [256]byte
+    buffer := make( []byte, tsize )
+    //var buffer [256]byte
     // read n bytes from client
     n, err := conn.Read( buffer[:] )
     checkN( err, conn ) // make sure read worked
@@ -167,10 +177,42 @@ func handle( conn net.Conn ) {
                 }
             }
         case "lr":      // /lr/, list request
-            // just concat entire list to send
-            //resp = "la@" + qfile[:len( qfile ) - 1]     // list answer
-            resp = "la@" + qfile    // list answer
-            // TODO what happens if this is longer than 256 char?
+            resp = "la@"    // begin crafting response
+            // file too big for single transmission
+            // initial header size is 5, la@1@, so counting that into
+            // the transmission size, the file must be longer than 251
+            // ( default ) bytes to reach this block of code
+            if len( qfile ) > ( tsize - 5 ) {
+                if command[1] == "init" {   // first request
+                    // add message number, delim, and the first
+                    // transmittable bytes
+                    resp = resp + "0@" + qfile[:( tsize - 5 )]
+                } else {    // subsequent requests
+                    // convert byte count to int
+                    bytes, err := strconv.Atoi( command[1] )
+                    check( err )    // make sure convert worked
+                    // replace tx'd bytes and delim to new header
+                    resp = resp + command[1] + "@"
+                    rlen := len( resp )     // capture header length
+                    // slices are always of size "txsize - header
+                    // length", so find end byte
+                    end := bytes + ( tsize - rlen )
+                    // if end goes beyond the bounds of the list
+                    if end > len( qfile ) {
+                        // replace byte count  with X to signal
+                        // final message, concat the rest of the file,
+                        // beginning with the start index
+                        resp = "la@X@" + qfile[bytes:]
+                    } else {
+                        // get slice from start index to end, concat
+                        // with response
+                        resp = resp + qfile[num:end]
+                    }
+                }
+            } else {    // file is smaller than the tx size
+                // just concat entire list to send
+                resp = resp + qfile    // list answer
+            }
         case "ar":      // /ar/, add request
             // append new quote to list
             qlist = append( qlist, command[1] )
@@ -178,7 +220,6 @@ func handle( conn net.Conn ) {
             qfile = qfile + "\n" + command[1]
             writeFile( qfile )
             resp = "aa@success"     // add answer
-            // TODO write to file
         case "r1":      // /r1/, remove request 1
             // same as list, just send whole file
             resp = "r1@" + qfile    // remove request 1
@@ -251,10 +292,15 @@ func handle( conn net.Conn ) {
 // globals
 var qlist []string      // list of quotes
 var qfile string        // file object
+var tsize int           // size of transmission buffer
 
 
 // main, create port and wait for connection
 func main() {
+
+    // flag for default transmission size
+    flag.IntVar( &tsize, "s", 256, "transmission size ( bytes )" )
+    flag.Parse()
 
     qfile = fread() // read quote file, init ( global ) list of quotes
 
