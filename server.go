@@ -1,11 +1,10 @@
 // =============================================================================
 // Auth: alex
 // File: server.go
-// Revn: 06-14-2024  4.0
+// Revn: 06-17-2024  4.1
 // Func: host MOTD connection
 //
-// TODO: catch keyboard int. signal
-//       remove ioutil import
+// TODO: remove ioutil import
 //       add more /codes/ to handle
 //       add flags, like specify port
 //       write usage and errors to logfile
@@ -43,6 +42,7 @@
 // 06-13-2024: removed debug print statements
 //             commented
 //*06-14-2024: byte count-based PWFT rewrite
+//*06-17-2024: catch keyboard interrupts with os/signal and syscall
 //
 // =============================================================================
 
@@ -55,9 +55,11 @@ import (
     "io/ioutil" // ReadFile
     "net"       // ResovleTCPAddr, ListenTCP, listener.Accept
                 // conn.Read,Write
-    "os"        // Exit
-    "strconv"   // Itoa
+    "os"        // Exit, Create, os.Signal
+    "os/signal" // Notify
+    "strconv"   // Itoa, Atoi
     "strings"   // Split
+    "syscall"   // syscall.SIGINT,SIGTERM
 )
 
 
@@ -206,7 +208,7 @@ func handle( conn net.Conn ) {
                     } else {
                         // get slice from start index to end, concat
                         // with response
-                        resp = resp + qfile[num:end]
+                        resp = resp + qfile[bytes:end]
                     }
                 }
             } else {    // file is smaller than the tx size
@@ -298,6 +300,11 @@ var tsize int           // size of transmission buffer
 // main, create port and wait for connection
 func main() {
 
+    // create buffered channel for catching keyboard interrupt signal
+    sigs := make( chan os.Signal, 1 )
+    // set interrupt and terminate signals to notify channel
+    signal.Notify( sigs, syscall.SIGINT, syscall.SIGTERM )
+
     // flag for default transmission size
     flag.IntVar( &tsize, "s", 256, "transmission size ( bytes )" )
     flag.Parse()
@@ -313,15 +320,19 @@ func main() {
     // create listener object from ip:port
     listener, err := net.ListenTCP( "tcp", addr )
 
+    go func() {     // keyboard interrupt thread
+        // print kill message
+        fmt.Println( "press ctrl+C to stop..." )
+        <- sigs     // blocking read of signal from channel
+        fmt.Println( "\nexiting" )  // exit message
+        os.Exit( 0 )    // exeunt
+    }()
+
     for {
         // wait, create connection when found
         conn, err := listener.Accept()
         check( err )    // make sure connection works
-    
         go handle( conn )  // handle connection
     }
-
-    os.Exit( 0 )    // exeunt
-
 }
 
