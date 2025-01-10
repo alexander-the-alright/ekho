@@ -1,7 +1,7 @@
 // =============================================================================
 // Auth: alex
 // File: client.go
-// Revn: 06-14-2024  3.0
+// Revn: 01-09-2025  4.0
 // Func: ask server for a message of the day quote
 //
 // TODO: remove ioutil import
@@ -33,6 +33,7 @@
 //             STARTED BYTE-BASED PWFT REWRITE
 //*06-14-2024: finished byte-based PWFT rewrite
 //             commented
+//*01-09-2025: basically just copy/pasted from /la/ into /r1/, /r2/
 //
 // =============================================================================
 
@@ -226,28 +227,74 @@ func handle( conn net.Conn ) {
         // to remove. There was probably a way to handle this a little
         // more simply, but this, I feel, has some nuance to it that I
         // actually like
-            // redo /la/, list all quotes
+            // redo /r1/, list all quotes
             // split recv'd message over newline to create quote list
-            quotes := strings.Split( msg[1], "\n" )
-            for p, v := range quotes {      // iterate over quotes
-                // print num of quote, followed by that quote
-                fmt.Println( p + 1, "\t", v )
+            if len( msg ) > 2 {     // multistage send condition
+                if msg[1] == "X" {      // final message
+                    // TODO update
+                    // read entire temp storage file as byte array
+                    tfile, err := ioutil.ReadFile( "temp.q" )
+                    check( err )    // check read for errors
+                    // cast file to string, concat with recv'd string
+                    tstr := string( tfile ) + msg[2]
+                    // split concat over newlines, separating quotes
+                    tlist := strings.Split( tstr, "\n" )
+                    // iterate over array, printing each quote
+                    for p, v := range tlist {
+                        fmt.Println( p + 1, "\t", v )
+                    }
+                    // delete temp storage file
+                    err = os.Remove( "temp.q" )
+                    check( err )    // check rm for errors
+                    // ask user which quote to remove
+                    resp = "r2@" + in( "\n-> " )
+                } else {    // first or intermediate message
+                    // open temp quote storage file, creating if
+                    // necessary, with write-only permissions, in
+                    // append mode, wr u perm, r g/w perm
+                    f, err := os.OpenFile( "temp.q", os.O_WRONLY | os.O_APPEND | os.O_CREATE, 0644 )
+                    check( err )    // check file open for errors
+                    // write received message to file, keeping track
+                    // of bytes written
+                    n, err = f.WriteString( msg[2] )
+                    check( err )    // check file write for errors
+                    // cast bytes already written field to int
+                    b, err := strconv.Atoi( msg[1] )
+                    check( err )    // check cast for errors
+                    // add bytes just written to bytes already
+                    // written, cast back to string, and append to
+                    // response variable
+                    resp = "r1@" + strconv.Itoa( b + n )
+                }
+            } else {
+                // split recv'd message over \n, create quote list
+                quotes := strings.Split( msg[1], "\n" )
+                for p, v := range quotes {      // iterate over quotes
+                    // print num of quote, followed by that quote
+                    fmt.Println( p + 1, "\t", v )
+                }
+                // ask user which quote to remove
+                resp = "r2@" + in( "\n-> " )
             }
-            // ask user which quote to remove
-            resp = "r2@" + in( "\n-> " )
         case "r2":      // /r2/, remove ( second transaction )
             // if server says remove succeeded
             if msg[1] == "success" {
                 fmt.Println( "Remove successful\n" )    // success
                 // list all quotes to validate remove succeeded
                 // TODO should /aa/ also make /lr/ before /te/?
-                resp = "lr@dumvar"  // set transaction end message
+                resp = "lr@init"    // set transaction end message
             // if server says remove failed
             } else if msg[1] == "error" {
                 fmt.Println( "Remove failed" )      // print failure
                 resp = "te@error"   // set transaction end message
             // if unknown status message
             } else {
+                // TODO there's a known issue where if the buffer
+                // size ( -s ) is less than 10, on the server side,
+                // 'success' will get cut off ( r2@success )
+                // and /r2/ will end up down here despite having
+                // actually worked correctly, and with not display the
+                // list, as it should on success
                 // print unknown status
                 fmt.Println( "Unknown error code: " + msg[1] )
                 // TODO should this be unknown instead of error?
@@ -338,7 +385,7 @@ func main() {
                 _, rerr := strconv.Atoi( flag.Args()[0] )
                 // if there was an error, just pretend there's no args
                 if rerr != nil {
-                    command = "r1@dumvar"   // remove request 1
+                    command = "r1@init"     // remove request 1
                     // TODO come up w/ useful argument, replace dumvar
                 } else {
                     // if user knows the number, take care of it
@@ -348,7 +395,7 @@ func main() {
                 }
             } else {    // if no argument was specified for remove
                 // jump right into remove request 1
-                command = "r1@dumvar"
+                command = "r1@init"
             }
         default:    // if no flag was specified
             // begin transaction for quote request

@@ -1,7 +1,7 @@
 // =============================================================================
 // Auth: alex
 // File: server.go
-// Revn: 06-17-2024  4.1
+// Revn: 01-09-2025  5.0
 // Func: host MOTD connection
 //
 // TODO: remove ioutil import
@@ -43,6 +43,7 @@
 //             commented
 //*06-14-2024: byte count-based PWFT rewrite
 //*06-17-2024: catch keyboard interrupts with os/signal and syscall
+//*01-09-2025: copied lr/la PWFT updates into r1/r2
 //
 // =============================================================================
 
@@ -223,8 +224,42 @@ func handle( conn net.Conn ) {
             writeFile( qfile )
             resp = "aa@success"     // add answer
         case "r1":      // /r1/, remove request 1
-            // same as list, just send whole file
-            resp = "r1@" + qfile    // remove request 1
+            resp = "r1@"    // begin crafting response
+            // file too big for single transmission
+            // initial header size is 5, r1@1@, so counting that into
+            // the transmission size, the file must be longer than 251
+            // ( default ) bytes to reach this block of code
+            if len( qfile ) > ( tsize - 5 ) {
+                if command[1] == "init" {   // first request
+                    // add message number, delim, and the first
+                    // transmittable bytes
+                    resp = resp + "0@" + qfile[:( tsize - 5 )]
+                } else {    // subsequent requests
+                    // convert byte count to int
+                    bytes, err := strconv.Atoi( command[1] )
+                    check( err )    // make sure convert worked
+                    // replace tx'd bytes and delim to new header
+                    resp = resp + command[1] + "@"
+                    rlen := len( resp )     // capture header length
+                    // slices are always of size "txsize - header
+                    // length", so find end byte
+                    end := bytes + ( tsize - rlen )
+                    // if end goes beyond the bounds of the list
+                    if end > len( qfile ) {
+                        // replace byte count  with X to signal
+                        // final message, concat the rest of the file,
+                        // beginning with the start index
+                        resp = "r1@X@" + qfile[bytes:]
+                    } else {
+                        // get slice from start index to end, concat
+                        // with response
+                        resp = resp + qfile[bytes:end]
+                    }
+                }
+            } else {    // file is smaller than the tx size
+                // just concat entire list to send
+                resp = resp + qfile    // list answer
+            }
         case "r2":      // /r2/, remove request 2
             // convert message argument to string to make sure it's a
             // valid number
@@ -270,6 +305,11 @@ func handle( conn net.Conn ) {
                         writeFile( qfile )  // write back to file
                         // let client know remove was successful
                         resp = "r2@success"
+                        // TODO for buffer sizes ( -s ) below 10, this
+                        // will cause a soft error on the other end
+                        // if it's less than 10, 'success' gets cut
+                        // off and client doesn't register it as an
+                        // actual success
                 }
             }
         case "te":      // /te/, transaction end
